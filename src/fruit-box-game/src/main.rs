@@ -4,7 +4,7 @@ const ROWS: usize = 10;
 const COLS: usize = 17;
 const SCALE: f32 = 100.;
 const HEIGHT: f32 = ROWS as f32 * SCALE;
-const WIDTH: f32 = COLS as f32 * SCALE;
+const WIDTH: f32 = (COLS + 3) as f32 * SCALE;
 
 #[derive(Clone)]
 enum CellStatus {
@@ -21,6 +21,12 @@ struct Cell {
 
 #[derive(Resource)]
 struct Grid(Vec<Vec<Cell>>);
+
+#[derive(Component)]
+struct ScoreText;
+
+#[derive(Component)]
+struct CountdownText;
 
 impl Grid {
     pub fn new() -> Self {
@@ -46,7 +52,7 @@ fn main() {
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Grid::new())
         .add_systems(Startup, setup)
-        .add_systems(Update, update_cells)
+        .add_systems(Update, (update_cells, update_score).chain())
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
@@ -102,6 +108,26 @@ fn setup(
                 .observe(end_drag);
         }
     }
+
+    commands.spawn((
+        ScoreText,
+        Text::new("Score: 0"),
+        TextColor(Color::WHITE),
+        TextFont {
+            font_size: 32.,
+            ..default()
+        },
+        TextLayout {
+            justify: JustifyText::Right,
+            ..default()
+        },
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(15.),
+            right: Val::Px(15.),
+            ..default()
+        },
+    ));
 }
 
 fn drag_over_cell<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
@@ -154,5 +180,16 @@ fn update_cells(
                 material.0 = cell_color.clone();
             }
         }
+    }
+}
+
+fn update_score(cells: Query<&mut Cell>, mut score_text: Query<(&ScoreText, &mut Text)>) {
+    let score = cells
+        .iter()
+        .filter(|cell| matches!(cell.status, CellStatus::Hidden))
+        .count();
+
+    for (_, mut text) in score_text.iter_mut() {
+        text.0 = format!("Score: {score}");
     }
 }
