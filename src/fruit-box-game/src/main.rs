@@ -29,9 +29,6 @@ struct Cell {
     status: Status,
 }
 
-#[derive(Resource)]
-struct Grid(Vec<Vec<Cell>>);
-
 #[derive(Component)]
 struct ScoreText;
 
@@ -41,32 +38,9 @@ struct CountdownText;
 #[derive(Component)]
 struct CountdownTimer(Timer);
 
-impl Grid {
-    pub fn new() -> Self {
-        let mut grid: Vec<Vec<Cell>> = Vec::with_capacity(COLS);
-        for col in 0..COLS {
-            let mut rows = Vec::with_capacity(ROWS);
-            for row in 0..ROWS {
-                let value = rand::random_range(1..=9);
-                let cell = Cell {
-                    col,
-                    row,
-                    value,
-                    status: Status::Default,
-                };
-                rows.push(cell);
-            }
-
-            grid.push(rows);
-        }
-        Grid(grid)
-    }
-}
-
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(Grid::new())
         .add_systems(Startup, setup)
         .add_systems(Update, ((update_cells, update_score).chain(), update_timer))
         .add_plugins((
@@ -87,17 +61,17 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    grid: Res<Grid>,
 ) {
     commands.spawn(Camera2d);
 
     let square = Rectangle::new(SCALE, SCALE);
     let cell_color = materials.add(Color::WHITE);
     let text_color = Color::BLACK;
+    let grid = build_cells();
 
     for x in 0..COLS {
         for y in 0..ROWS {
-            let cell = grid.0[x][y].clone();
+            let cell = grid[x][y].clone();
             commands
                 .spawn((
                     cell.clone(),
@@ -178,6 +152,9 @@ fn drag_over<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
         return;
     }
 
+    // TODO: This isn't right. You can select cells on different aixes,
+    // but only in a box.
+    //
     // Selected cells must be in the same axis
     let is_axis_aligned = query
         .iter()
@@ -197,10 +174,14 @@ fn drag_over<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
             .iter()
             .filter(|c| matches!(c.status, Status::Selected))
             .any(|c| {
+                // TODO: This needs to ignore cells that are hidden
+                // If we're looking at a cell not immediately connected, but they aren't
+                // connected because of a hidden cell, that is considered connected
+
                 (c.row + 1 == cell.row && c.col == cell.col)
-                    || (c.row.saturating_sub(1) == cell.row && c.col == cell.col)
+                    || (c.row.wrapping_sub(1) == cell.row && c.col == cell.col)
                     || (c.row == cell.row && c.col + 1 == cell.col)
-                    || (c.row == cell.row && c.col.saturating_sub(1) == cell.col)
+                    || (c.row == cell.row && c.col.wrapping_sub(1) == cell.col)
             });
 
         if !is_connected {
@@ -287,7 +268,6 @@ fn update_timer(
     mut countdown_text: Single<&mut Text, With<CountdownText>>,
 ) {
     timer.0.tick(time.delta());
-
     countdown_text.0 = format_duration(timer.0.remaining());
 }
 
@@ -297,4 +277,24 @@ fn format_duration(duration: Duration) -> String {
         duration.as_secs() / 60,
         duration.as_secs() % 60
     )
+}
+
+fn build_cells() -> Vec<Vec<Cell>> {
+    let mut cells: Vec<Vec<Cell>> = Vec::with_capacity(COLS);
+    for col in 0..COLS {
+        let mut rows = Vec::with_capacity(ROWS);
+        for row in 0..ROWS {
+            let value = rand::random_range(1..=9);
+            let cell = Cell {
+                col,
+                row,
+                value,
+                status: Status::Default,
+            };
+            rows.push(cell);
+        }
+
+        cells.push(rows);
+    }
+    cells
 }
