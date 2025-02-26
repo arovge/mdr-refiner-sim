@@ -174,11 +174,12 @@ fn drag_over_cell<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
     }
 
     // Selected cells must be in the same axis
-    let is_aligned = query.iter().all(|c| {
-        !matches!(c.status, CellStatus::Selected) || c.row == cell.row || c.col == cell.col
-    });
+    let is_axis_aligned = query
+        .iter()
+        .filter(|c| matches!(c.status, CellStatus::Selected))
+        .all(|c| c.row == cell.row || c.col == cell.col);
 
-    if !is_aligned {
+    if !is_axis_aligned {
         return;
     }
 
@@ -188,19 +189,20 @@ fn drag_over_cell<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
 
     // Selected cells must be connected to another selected cell,
     // or be the first selected cell
-    let is_connected = query.iter().any(|c| {
-        if !matches!(c.status, CellStatus::Selected) {
-            return false;
+    if !is_first_selected_cell {
+        let is_connected = query
+            .iter()
+            .filter(|c| matches!(c.status, CellStatus::Selected))
+            .any(|c| {
+                (c.row + 1 == cell.row && c.col == cell.col)
+                    || (c.row - 1 == cell.row && c.col == cell.col)
+                    || (c.row == cell.row && c.col + 1 == cell.col)
+                    || (c.row == cell.row && c.col - 1 == cell.col)
+            });
+
+        if !is_connected {
+            return;
         }
-
-        return (c.row + 1 == cell.row && c.col == cell.col)
-            || (c.row - 1 == cell.row && c.col == cell.col)
-            || (c.row == cell.row && c.col + 1 == cell.col)
-            || (c.row == cell.row && c.col - 1 == cell.col);
-    });
-
-    if !is_first_selected_cell && !is_connected {
-        return;
     }
 
     let mut cell = query.get_mut(trigger.entity()).unwrap();
