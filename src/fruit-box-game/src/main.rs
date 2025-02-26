@@ -168,20 +168,38 @@ fn setup(
 }
 
 fn drag_over_cell<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
-    // TODO: Need to add a check that this cell is connected to other cells.
-    // Otherwise, the user could have the cursor leave the window or drag over hidden cells,
-    // then continue the drag over an idle cell that isn't connected to the selected group.
-    //
     let cell = query.get(trigger.entity()).unwrap();
     if matches!(cell.status, CellStatus::Hidden) {
         return;
     }
 
+    // Selected cells must be in the same axis
     let is_aligned = query.iter().all(|c| {
         !matches!(c.status, CellStatus::Selected) || c.row == cell.row || c.col == cell.col
     });
 
     if !is_aligned {
+        return;
+    }
+
+    let is_first_selected_cell = query
+        .iter()
+        .all(|c| !matches!(c.status, CellStatus::Selected));
+
+    // Selected cells must be connected to another selected cell,
+    // or be the first selected cell
+    let is_connected = query.iter().any(|c| {
+        if !matches!(c.status, CellStatus::Selected) {
+            return false;
+        }
+
+        return (c.row + 1 == cell.row && c.col == cell.col)
+            || (c.row - 1 == cell.row && c.col == cell.col)
+            || (c.row == cell.row && c.col + 1 == cell.col)
+            || (c.row == cell.row && c.col - 1 == cell.col);
+    });
+
+    if !is_first_selected_cell && !is_connected {
         return;
     }
 
