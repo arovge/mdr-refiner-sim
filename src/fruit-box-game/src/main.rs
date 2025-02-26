@@ -12,9 +12,9 @@ const WIDTH: f32 = (COLS + 3) as f32 * SCALE;
 const GAME_DURACTION_SECS: f32 = 120.;
 
 #[derive(Clone, Copy)]
-enum CellStatus {
+enum Status {
+    Default,
     Selected,
-    Idle,
     Hidden,
 }
 
@@ -23,7 +23,7 @@ struct Cell {
     col: usize,
     row: usize,
     value: usize,
-    status: CellStatus,
+    status: Status,
 }
 
 #[derive(Resource)]
@@ -49,7 +49,7 @@ impl Grid {
                     col,
                     row,
                     value,
-                    status: CellStatus::Idle,
+                    status: Status::Default,
                 };
                 rows.push(cell);
             }
@@ -116,9 +116,9 @@ fn setup(
                         },
                     ));
                 })
-                .observe(drag_over_cell::<Pointer<DragEnter>>)
-                .observe(drag_over_cell::<Pointer<Drag>>)
-                .observe(end_drag);
+                .observe(drag_over::<Pointer<DragEnter>>)
+                .observe(drag_over::<Pointer<Drag>>)
+                .observe(drag_end);
         }
     }
 
@@ -167,32 +167,30 @@ fn setup(
     )));
 }
 
-fn drag_over_cell<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
+fn drag_over<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
     let cell = query.get(trigger.entity()).unwrap();
-    if matches!(cell.status, CellStatus::Hidden) {
+    if matches!(cell.status, Status::Hidden) {
         return;
     }
 
     // Selected cells must be in the same axis
     let is_axis_aligned = query
         .iter()
-        .filter(|c| matches!(c.status, CellStatus::Selected))
+        .filter(|c| matches!(c.status, Status::Selected))
         .all(|c| c.row == cell.row || c.col == cell.col);
 
     if !is_axis_aligned {
         return;
     }
 
-    let is_first_selected_cell = query
-        .iter()
-        .all(|c| !matches!(c.status, CellStatus::Selected));
+    let is_first_selected_cell = query.iter().all(|c| !matches!(c.status, Status::Selected));
 
     // Selected cells must be connected to another selected cell,
     // or be the first selected cell
     if !is_first_selected_cell {
         let is_connected = query
             .iter()
-            .filter(|c| matches!(c.status, CellStatus::Selected))
+            .filter(|c| matches!(c.status, Status::Selected))
             .any(|c| {
                 (c.row + 1 == cell.row && c.col == cell.col)
                     || (c.row - 1 == cell.row && c.col == cell.col)
@@ -207,20 +205,20 @@ fn drag_over_cell<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
 
     let mut cell = query.get_mut(trigger.entity()).unwrap();
 
-    cell.status = CellStatus::Selected;
+    cell.status = Status::Selected;
 }
 
-fn end_drag(_trigger: Trigger<Pointer<DragEnd>>, mut query: Query<&mut Cell>) {
+fn drag_end(_trigger: Trigger<Pointer<DragEnd>>, mut query: Query<&mut Cell>) {
     let mut selected_cells = query
         .iter_mut()
-        .filter(|cell| matches!(cell.status, CellStatus::Selected))
+        .filter(|cell| matches!(cell.status, Status::Selected))
         .collect::<Vec<_>>();
     let sum = selected_cells.iter().map(|cell| cell.value).sum::<usize>();
 
     let status = if sum == 10 {
-        CellStatus::Hidden
+        Status::Hidden
     } else {
-        CellStatus::Idle
+        Status::Default
     };
 
     for cell in selected_cells.iter_mut() {
@@ -240,7 +238,7 @@ fn update_cells(
 
     let selected_total = cells
         .iter()
-        .filter(|(cell, _material, _children)| matches!(cell.status, CellStatus::Selected))
+        .filter(|(cell, _material, _children)| matches!(cell.status, Status::Selected))
         .map(|(cell, _material, _children)| cell.value)
         .sum::<usize>();
 
@@ -252,18 +250,18 @@ fn update_cells(
 
     for (cell, mut material, children) in cells.iter_mut() {
         match cell.status {
-            CellStatus::Selected => {
+            Status::Default => {
+                material.0 = cell_color.clone();
+            }
+            Status::Selected => {
                 material.0 = selected_color.clone();
             }
-            CellStatus::Hidden => {
+            Status::Hidden => {
                 material.0 = hidden_color.clone();
                 for child in children {
                     let mut text = cell_text.get_mut(*child).unwrap();
                     text.0 = String::new();
                 }
-            }
-            CellStatus::Idle => {
-                material.0 = cell_color.clone();
             }
         }
     }
@@ -272,7 +270,7 @@ fn update_cells(
 fn update_score(cells: Query<&mut Cell>, mut score_text: Single<&mut Text, With<ScoreText>>) {
     let score = cells
         .iter()
-        .filter(|cell| matches!(cell.status, CellStatus::Hidden))
+        .filter(|cell| matches!(cell.status, Status::Hidden))
         .count();
 
     score_text.0 = format!("Score: {score}");
