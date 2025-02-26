@@ -1,4 +1,4 @@
-use bevy::{prelude::*, window::WindowResolution};
+use bevy::{color::palettes::tailwind::CYAN_300, prelude::*, window::WindowResolution};
 
 const ROWS: usize = 10;
 const COLS: usize = 17;
@@ -6,7 +6,18 @@ const SCALE: f32 = 100.;
 const HEIGHT: f32 = ROWS as f32 * SCALE;
 const WIDTH: f32 = COLS as f32 * SCALE;
 
-struct Cell(u32);
+#[derive(Clone)]
+enum CellStatus {
+    Selected,
+    Idle,
+    Hidden,
+}
+
+#[derive(Component, Clone)]
+struct Cell {
+    value: usize,
+    status: CellStatus,
+}
 
 #[derive(Resource)]
 struct Grid(Vec<Vec<Cell>>);
@@ -14,11 +25,16 @@ struct Grid(Vec<Vec<Cell>>);
 impl Grid {
     pub fn new() -> Self {
         let mut grid: Vec<Vec<Cell>> = Vec::new();
-        for x in 0..COLS {
+        for col in 0..COLS {
             grid.push(Vec::new());
+
             for _ in 0..ROWS {
-                let val = rand::random_range(1..=9);
-                grid[x].push(Cell(val));
+                let value = rand::random_range(1..=9);
+                let cell = Cell {
+                    value,
+                    status: CellStatus::Idle,
+                };
+                grid[col].push(cell);
             }
         }
         Grid(grid)
@@ -30,13 +46,18 @@ fn main() {
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Grid::new())
         .add_systems(Startup, setup)
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                resolution: WindowResolution::new(WIDTH, HEIGHT).with_scale_factor_override(1.0),
+        .add_systems(Update, update_cells)
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: WindowResolution::new(WIDTH, HEIGHT)
+                        .with_scale_factor_override(1.0),
+                    ..default()
+                }),
                 ..default()
             }),
-            ..default()
-        }))
+            MeshPickingPlugin,
+        ))
         .run();
 }
 
@@ -49,39 +70,85 @@ fn setup(
     commands.spawn(Camera2d);
 
     let square = Rectangle::new(SCALE, SCALE);
+    let cell_color = materials.add(Color::WHITE);
+    let text_color = Color::BLACK;
 
     for x in 0..COLS {
         for y in 0..ROWS {
-            let color = if (x + y) % 2 == 0 {
-                Color::WHITE
-            } else {
-                Color::BLACK
-            };
-            commands.spawn((
-                Mesh2d(meshes.add(square)),
-                MeshMaterial2d(materials.add(color)),
-                Transform::from_xyz(
-                    (x as f32 * SCALE) - (WIDTH / 2.) + (SCALE / 2.),
-                    (y as f32 * SCALE) - (HEIGHT / 2.) + (SCALE / 2.),
-                    0.,
-                ),
-            ));
+            let cell = grid.0[x][y].clone();
+            commands
+                .spawn((
+                    cell.clone(),
+                    Mesh2d(meshes.add(square)),
+                    MeshMaterial2d(cell_color.clone()),
+                    Transform::from_xyz(
+                        (x as f32 * SCALE) - (WIDTH / 2.) + (SCALE / 2.),
+                        (y as f32 * SCALE) - (HEIGHT / 2.) + (SCALE / 2.),
+                        0.,
+                    ),
+                ))
+                .with_children(|parent| {
+                    parent.spawn((
+                        Text2d(cell.clone().value.to_string()),
+                        TextColor(text_color),
+                    ));
+                })
+                .observe(drag_over_cell::<Pointer<DragEnter>>)
+                .observe(drag_over_cell::<Pointer<Drag>>)
+                .observe(end_drag);
+        }
+    }
+}
 
-            let text_color = if (x + y) % 2 == 0 {
-                Color::BLACK
-            } else {
-                Color::WHITE
-            };
-            commands.spawn((
-                Text2d(grid.0[x][y].0.to_string()),
-                TextColor(text_color),
-                MeshMaterial2d(materials.add(color)),
-                Transform::from_xyz(
-                    (x as f32 * SCALE) - (WIDTH / 2.) + (SCALE / 2.),
-                    (y as f32 * SCALE) - (HEIGHT / 2.) + (SCALE / 2.),
-                    1.,
-                ),
-            ));
+fn drag_over_cell<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
+    let mut cell = query.get_mut(trigger.entity()).unwrap();
+    if !matches!(cell.status, CellStatus::Hidden) {
+        cell.status = CellStatus::Selected;
+    }
+}
+
+fn end_drag(_trigger: Trigger<Pointer<DragEnd>>, mut query: Query<&mut Cell>) {
+    let mut selected_cells = query
+        .iter_mut()
+        .filter(|cell| matches!(cell.status, CellStatus::Selected))
+        .collect::<Vec<_>>();
+    let sum = selected_cells.iter().map(|cell| cell.value).sum::<usize>();
+
+    if sum == 10 {
+        for cell in selected_cells.iter_mut() {
+            cell.status = CellStatus::Hidden;
+        }
+    } else {
+        for cell in selected_cells.iter_mut() {
+            cell.status = CellStatus::Idle;
+        }
+    }
+}
+
+fn update_cells(
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut cells: Query<(&mut Cell, &mut MeshMaterial2d<ColorMaterial>, &Children)>,
+    mut cell_text: Query<&mut Text2d>,
+) {
+    let cell_color = materials.add(Color::WHITE);
+    let hidden_color = materials.add(Color::BLACK);
+    let selected_color = materials.add(Color::from(CYAN_300));
+
+    for (cell, mut material, children) in cells.iter_mut() {
+        match cell.status {
+            CellStatus::Selected => {
+                material.0 = selected_color.clone();
+            }
+            CellStatus::Hidden => {
+                material.0 = hidden_color.clone();
+                for child in children {
+                    let mut text = cell_text.get_mut(*child).unwrap();
+                    text.0 = String::new();
+                }
+            }
+            CellStatus::Idle => {
+                material.0 = cell_color.clone();
+            }
         }
     }
 }
