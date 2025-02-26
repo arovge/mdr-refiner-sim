@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::{
     color::palettes::tailwind::{RED_300, RED_400},
     prelude::*,
@@ -10,6 +12,7 @@ const SCALE: f32 = 100.;
 const HEIGHT: f32 = ROWS as f32 * SCALE;
 const WIDTH: f32 = (COLS + 3) as f32 * SCALE;
 const GAME_DURACTION_SECS: f32 = 120.;
+const TARGET_SUM: usize = 10;
 
 #[derive(Clone, Copy)]
 enum Status {
@@ -144,7 +147,9 @@ fn setup(
 
     commands.spawn((
         CountdownText,
-        Text::new("2:00"),
+        Text::new(format_duration(Duration::from_secs_f32(
+            GAME_DURACTION_SECS,
+        ))),
         TextColor(Color::WHITE),
         TextFont {
             font_size: 32.,
@@ -215,7 +220,7 @@ fn drag_end(_trigger: Trigger<Pointer<DragEnd>>, mut query: Query<&mut Cell>) {
         .collect::<Vec<_>>();
     let sum = selected_cells.iter().map(|cell| cell.value).sum::<usize>();
 
-    let status = if sum == 10 {
+    let status = if sum == TARGET_SUM {
         Status::Hidden
     } else {
         Status::Default
@@ -242,7 +247,7 @@ fn update_cells(
         .map(|(cell, _material, _children)| cell.value)
         .sum::<usize>();
 
-    let selected_color = if selected_total == 10 {
+    let selected_color = if selected_total == TARGET_SUM {
         summed_selected_color
     } else {
         selected_color
@@ -283,9 +288,13 @@ fn update_timer(
 ) {
     timer.0.tick(time.delta());
 
-    countdown_text.0 = format!(
+    countdown_text.0 = format_duration(timer.0.remaining());
+}
+
+fn format_duration(duration: Duration) -> String {
+    format!(
         "{:0>1}:{:0>2}",
-        timer.0.remaining().as_secs() / 60,
-        timer.0.remaining().as_secs() % 60
-    );
+        duration.as_secs() / 60,
+        duration.as_secs() % 60
+    )
 }
