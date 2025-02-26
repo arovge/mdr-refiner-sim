@@ -1,4 +1,8 @@
-use bevy::{color::palettes::tailwind::CYAN_300, prelude::*, window::WindowResolution};
+use bevy::{
+    color::palettes::tailwind::{RED_300, RED_400},
+    prelude::*,
+    window::WindowResolution,
+};
 
 const ROWS: usize = 10;
 const COLS: usize = 17;
@@ -172,14 +176,14 @@ fn end_drag(_trigger: Trigger<Pointer<DragEnd>>, mut query: Query<&mut Cell>) {
         .collect::<Vec<_>>();
     let sum = selected_cells.iter().map(|cell| cell.value).sum::<usize>();
 
-    if sum == 10 {
-        for cell in selected_cells.iter_mut() {
-            cell.status = CellStatus::Hidden;
-        }
+    let status = if sum == 10 {
+        CellStatus::Hidden
     } else {
-        for cell in selected_cells.iter_mut() {
-            cell.status = CellStatus::Idle;
-        }
+        CellStatus::Idle
+    };
+
+    for cell in selected_cells.iter_mut() {
+        cell.status = status.clone();
     }
 }
 
@@ -190,7 +194,20 @@ fn update_cells(
 ) {
     let cell_color = materials.add(Color::WHITE);
     let hidden_color = materials.add(Color::BLACK);
-    let selected_color = materials.add(Color::from(CYAN_300));
+    let selected_color = materials.add(Color::from(RED_300));
+    let summed_selected_color = materials.add(Color::from(RED_400));
+
+    let selected_total = cells
+        .iter()
+        .filter(|(cell, _material, _children)| matches!(cell.status, CellStatus::Selected))
+        .map(|(cell, _material, _children)| cell.value)
+        .sum::<usize>();
+
+    let selected_color = if selected_total == 10 {
+        summed_selected_color
+    } else {
+        selected_color
+    };
 
     for (cell, mut material, children) in cells.iter_mut() {
         match cell.status {
