@@ -91,6 +91,10 @@ fn setup(
                     parent.spawn((
                         Text2d(cell.clone().value.to_string()),
                         TextColor(text_color),
+                        TextFont {
+                            font_size: 32.,
+                            ..default()
+                        },
                     ));
                 })
                 .observe(drag_over_cell::<Pointer<DragEnter>>)
