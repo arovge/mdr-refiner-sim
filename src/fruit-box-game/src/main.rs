@@ -29,6 +29,34 @@ struct Cell {
     status: Status,
 }
 
+#[derive(Default, Clone, Copy)]
+struct Position {
+    col: usize,
+    row: usize,
+}
+
+#[derive(Clone, Default)]
+enum DragGesture {
+    #[default]
+    NotDragging,
+    Dragging {
+        start: Position,
+    },
+    Ended,
+}
+
+impl DragGesture {
+    fn start(&self) -> Option<Position> {
+        match self {
+            DragGesture::Dragging { start } => Some(start.clone()),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Resource, Default)]
+struct DragState(DragGesture);
+
 #[derive(Component)]
 struct ScoreText;
 
@@ -41,6 +69,7 @@ struct CountdownTimer(Timer);
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(DragState::default())
         .add_systems(Startup, setup)
         .add_systems(Update, ((update_cells, update_score).chain(), update_timer))
         .add_plugins((
@@ -93,8 +122,8 @@ fn setup(
                         },
                     ));
                 })
-                .observe(drag_over::<Pointer<DragEnter>>)
-                .observe(drag_over::<Pointer<Drag>>)
+                .observe(drag_start)
+                .observe(drag_over)
                 .observe(drag_end);
         }
     }
@@ -146,73 +175,53 @@ fn setup(
     )));
 }
 
-fn drag_over<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
+fn drag_start(
+    trigger: Trigger<Pointer<DragStart>>,
+    query: Query<&Cell>,
+    mut drag_state: ResMut<DragState>,
+) {
     let cell = query.get(trigger.entity()).unwrap();
-    if matches!(cell.status, Status::Hidden) {
-        return;
-    }
-
-    // TODO: This isn't right. You can select cells on different aixes,
-    // but only in a box.
-    //
-    // Selected cells must be in the same axis
-    let is_axis_aligned = query
-        .iter()
-        .filter(|c| matches!(c.status, Status::Selected))
-        .all(|c| c.row == cell.row || c.col == cell.col);
-
-    if !is_axis_aligned {
-        return;
-    }
-
-    let is_first_selected_cell = query.iter().all(|c| !matches!(c.status, Status::Selected));
-
-    // Selected cells must be connected to another selected cell,
-    // or be the first selected cell
-    if !is_first_selected_cell {
-        let is_connected = query
-            .iter()
-            .filter(|c| matches!(c.status, Status::Selected))
-            .any(|c| {
-                // TODO: This needs to ignore cells that are hidden
-                // If we're looking at a cell not immediately connected, but they aren't
-                // connected because of a hidden cell, that is considered connected
-
-                (c.row + 1 == cell.row && c.col == cell.col)
-                    || (c.row.wrapping_sub(1) == cell.row && c.col == cell.col)
-                    || (c.row == cell.row && c.col + 1 == cell.col)
-                    || (c.row == cell.row && c.col.wrapping_sub(1) == cell.col)
-            });
-
-        if !is_connected {
-            return;
-        }
-    }
-
-    let mut cell = query.get_mut(trigger.entity()).unwrap();
-
-    cell.status = Status::Selected;
+    drag_state.0 = DragGesture::Dragging {
+        start: Position {
+            col: cell.col,
+            row: cell.row,
+        },
+    };
 }
 
-fn drag_end(_trigger: Trigger<Pointer<DragEnd>>, mut query: Query<&mut Cell>) {
-    let mut selected_cells = query
-        .iter_mut()
-        .filter(|cell| matches!(cell.status, Status::Selected))
-        .collect::<Vec<_>>();
-    let sum = selected_cells.iter().map(|cell| cell.value).sum::<usize>();
-
-    let status = if sum == TARGET_SUM {
-        Status::Hidden
-    } else {
-        Status::Default
+fn drag_over(
+    trigger: Trigger<Pointer<DragOver>>,
+    mut drag_state: ResMut<DragState>,
+    mut cells: Query<&mut Cell>,
+) {
+    let cell = cells.get(trigger.entity()).unwrap();
+    let drag_start = drag_state.0.start();
+    drag_state.0 = DragGesture::Dragging {
+        start: drag_start.unwrap_or(Position::default()),
     };
+    let Some(drag_start) = drag_start else { return };
 
-    for cell in selected_cells.iter_mut() {
-        cell.status = status.clone();
+    let col_range = drag_start.col.min(cell.col)..=drag_start.col.max(cell.col);
+    let row_range = drag_start.row.min(cell.row)..=drag_start.row.max(cell.row);
+
+    for mut cell in cells.iter_mut() {
+        if matches!(cell.status, Status::Hidden) {
+            continue;
+        }
+        cell.status = if col_range.contains(&cell.col) && row_range.contains(&cell.row) {
+            Status::Selected
+        } else {
+            Status::Default
+        };
     }
+}
+
+fn drag_end(_trigger: Trigger<Pointer<DragEnd>>, mut drag_state: ResMut<DragState>) {
+    drag_state.0 = DragGesture::Ended;
 }
 
 fn update_cells(
+    mut drag_state: ResMut<DragState>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut cells: Query<(&mut Cell, &mut MeshMaterial2d<ColorMaterial>, &Children)>,
     mut cell_text: Query<&mut Text2d>,
@@ -234,7 +243,19 @@ fn update_cells(
         selected_color
     };
 
-    for (cell, mut material, children) in cells.iter_mut() {
+    let drag_ended = matches!(drag_state.0, DragGesture::Ended);
+    if drag_ended {
+        drag_state.0 = DragGesture::NotDragging;
+    }
+
+    for (mut cell, mut material, children) in cells.iter_mut() {
+        if drag_ended && matches!(cell.status, Status::Selected) {
+            cell.status = if selected_total == TARGET_SUM {
+                Status::Hidden
+            } else {
+                Status::Default
+            };
+        }
         match cell.status {
             Status::Default => {
                 material.0 = cell_color.clone();
