@@ -18,7 +18,7 @@ const TARGET_SUM: usize = 10;
 enum Status {
     Default,
     Selected,
-    Hidden,
+    Scored,
 }
 
 #[derive(Component, Clone, Copy)]
@@ -205,7 +205,7 @@ fn drag_over(
     let row_range = drag_start.row.min(cell.row)..=drag_start.row.max(cell.row);
 
     for mut cell in cells.iter_mut() {
-        if matches!(cell.status, Status::Hidden) {
+        if matches!(cell.status, Status::Scored) {
             continue;
         }
         cell.status = if col_range.contains(&cell.col) && row_range.contains(&cell.row) {
@@ -251,7 +251,7 @@ fn update_cells(
     for (mut cell, mut material, children) in cells.iter_mut() {
         if drag_ended && matches!(cell.status, Status::Selected) {
             cell.status = if selected_total == TARGET_SUM {
-                Status::Hidden
+                Status::Scored
             } else {
                 Status::Default
             };
@@ -263,7 +263,7 @@ fn update_cells(
             Status::Selected => {
                 material.0 = selected_color.clone();
             }
-            Status::Hidden => {
+            Status::Scored => {
                 material.0 = hidden_color.clone();
                 for child in children {
                     let mut text = cell_text.get_mut(*child).unwrap();
@@ -277,7 +277,7 @@ fn update_cells(
 fn update_score(cells: Query<&mut Cell>, mut score_text: Single<&mut Text, With<ScoreText>>) {
     let score = cells
         .iter()
-        .filter(|cell| matches!(cell.status, Status::Hidden))
+        .filter(|cell| matches!(cell.status, Status::Scored))
         .count();
 
     score_text.0 = format!("Score: {score}");
