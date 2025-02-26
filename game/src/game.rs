@@ -220,10 +220,10 @@ fn drag_end(_trigger: Trigger<Pointer<DragEnd>>, mut drag_state: ResMut<DragStat
 }
 
 fn update_cells(
+    mut commands: Commands,
     mut drag_state: ResMut<DragState>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut cells: Query<(&mut Cell, &mut MeshMaterial2d<ColorMaterial>, &Children)>,
-    mut cell_text: Query<&mut Text2d>,
+    mut cells: Query<(&mut Cell, &mut MeshMaterial2d<ColorMaterial>, Entity)>,
 ) {
     let cell_color = materials.add(Color::WHITE);
     let hidden_color = materials.add(Color::BLACK);
@@ -232,8 +232,9 @@ fn update_cells(
 
     let selected_total = cells
         .iter()
-        .filter(|(cell, _material, _children)| matches!(cell.status, Status::Selected))
-        .map(|(cell, _material, _children)| cell.value)
+        .map(|(cell, _material, _entity)| cell)
+        .filter(|cell| matches!(cell.status, Status::Selected))
+        .map(|cell| cell.value)
         .sum::<usize>();
 
     let selected_color = if selected_total == TARGET_SUM {
@@ -247,7 +248,7 @@ fn update_cells(
         drag_state.0 = DragGesture::NotDragging;
     }
 
-    for (mut cell, mut material, children) in cells.iter_mut() {
+    for (mut cell, mut material, entity) in cells.iter_mut() {
         if drag_ended && matches!(cell.status, Status::Selected) {
             cell.status = if selected_total == TARGET_SUM {
                 Status::Scored
@@ -264,10 +265,7 @@ fn update_cells(
             }
             Status::Scored => {
                 material.0 = hidden_color.clone();
-                for child in children {
-                    let mut text = cell_text.get_mut(*child).unwrap();
-                    text.0 = String::new();
-                }
+                commands.entity(entity).despawn_descendants();
             }
         }
     }
