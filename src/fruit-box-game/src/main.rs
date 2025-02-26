@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use bevy::{
-    color::palettes::tailwind::{RED_300, RED_400},
+    color::palettes::tailwind::{RED_300, RED_400, YELLOW_400},
     prelude::*,
     window::WindowResolution,
 };
@@ -19,7 +19,7 @@ enum GameState {
     #[default]
     MainMenu,
     Playing,
-    Scoreboard,
+    Leaderboard,
 }
 
 #[derive(Clone, Copy)]
@@ -77,6 +77,15 @@ struct CountdownTimer(Timer);
 #[derive(Component)]
 struct MainMenu;
 
+#[derive(Component)]
+struct Leaderboard;
+
+#[derive(Component, Clone, Copy, Eq, PartialEq)]
+struct Score {
+    id: usize,
+    score: usize,
+}
+
 fn main() {
     App::new()
         .add_plugins((
@@ -102,6 +111,8 @@ fn main() {
                 .run_if(in_state(GameState::Playing)),
         )
         .add_systems(OnExit(GameState::Playing), tear_down_game)
+        .add_systems(OnEnter(GameState::Leaderboard), setup_leaderboard)
+        .add_systems(OnExit(GameState::Leaderboard), tear_down_leaderboard)
         .run();
 }
 
@@ -379,11 +390,20 @@ fn update_timer(
     mut commands: Commands,
     mut timer: Single<&mut CountdownTimer>,
     mut countdown_text: Single<&mut Text, With<CountdownText>>,
+    cells: Query<&Cell>,
+    high_scores: Query<&Score>,
 ) {
     timer.0.tick(time.delta());
     countdown_text.0 = format_duration(timer.0.remaining());
     if timer.0.finished() {
-        commands.set_state(GameState::Scoreboard);
+        let next_id = high_scores.iter().count() + 1;
+        let score = cells
+            .iter()
+            .filter(|c| matches!(c.status, Status::Scored))
+            .count();
+        let score = Score { id: next_id, score };
+        commands.spawn(score);
+        commands.set_state(GameState::Leaderboard);
     }
 }
 
@@ -393,6 +413,97 @@ fn format_duration(duration: Duration) -> String {
         duration.as_secs() / 60,
         duration.as_secs() % 60
     )
+}
+
+fn setup_leaderboard(mut commands: Commands, scores: Query<&Score>) {
+    let new_score = *scores.iter().max_by_key(|s| s.id).unwrap();
+    let top_scores: Vec<Score> = {
+        let mut top_scores = scores.iter().map(|s| *s).collect::<Vec<Score>>();
+        top_scores.sort_by(|a, b| a.score.cmp(&b.score).reverse());
+        top_scores.into_iter().take(5).collect()
+    };
+    let is_new_score_top_score = top_scores.contains(&new_score);
+
+    commands
+        .spawn((
+            Leaderboard,
+            Node {
+                display: Display::Flex,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(50.),
+                height: Val::Percent(100.),
+                width: Val::Percent(100.),
+                ..default()
+            },
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("Leaderboard"),
+                TextFont {
+                    font_size: 56.,
+                    ..default()
+                },
+            ));
+            parent.spawn((
+                Text::new("Rank\tScore"),
+                TextFont {
+                    font_size: 32.,
+                    ..default()
+                },
+            ));
+            for (index, top_score) in top_scores.iter().enumerate() {
+                let text_color = if top_score == &new_score {
+                    Color::from(YELLOW_400)
+                } else {
+                    Color::WHITE
+                };
+                let rank = index + 1;
+                parent.spawn((
+                    Text::new(format!("{rank}\t{}", top_score.score)),
+                    TextColor(text_color),
+                    TextFont {
+                        font_size: 32.,
+                        ..default()
+                    },
+                ));
+            }
+            if !is_new_score_top_score {
+                parent.spawn((
+                    Text::new(format!("Score\t{}", new_score.score)),
+                    TextColor(Color::from(YELLOW_400)),
+                    TextFont {
+                        font_size: 32.,
+                        ..default()
+                    },
+                ));
+            }
+            parent
+                .spawn((
+                    Text::new("Play"),
+                    TextColor(Color::BLACK),
+                    TextFont {
+                        font_size: 48.,
+                        ..default()
+                    },
+                    TextLayout {
+                        justify: JustifyText::Center,
+                        ..default()
+                    },
+                    Node {
+                        padding: UiRect::horizontal(Val::Px(100.)),
+                        ..default()
+                    },
+                    BorderRadius::all(Val::Px(12.)),
+                    BackgroundColor(Color::WHITE),
+                ))
+                .observe(play);
+        });
+}
+
+fn tear_down_leaderboard(mut commands: Commands, leaderboard: Single<Entity, With<Leaderboard>>) {
+    commands.entity(*leaderboard).despawn_recursive();
 }
 
 fn build_cells() -> Vec<Vec<Cell>> {
