@@ -5,6 +5,7 @@ const COLS: usize = 17;
 const SCALE: f32 = 100.;
 const HEIGHT: f32 = ROWS as f32 * SCALE;
 const WIDTH: f32 = (COLS + 3) as f32 * SCALE;
+const GAME_DURACTION_SECS: f32 = 120.;
 
 #[derive(Clone)]
 enum CellStatus {
@@ -27,6 +28,9 @@ struct ScoreText;
 
 #[derive(Component)]
 struct CountdownText;
+
+#[derive(Component)]
+struct CountdownTimer(Timer);
 
 impl Grid {
     pub fn new() -> Self {
@@ -52,7 +56,7 @@ fn main() {
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Grid::new())
         .add_systems(Startup, setup)
-        .add_systems(Update, (update_cells, update_score).chain())
+        .add_systems(Update, ((update_cells, update_score).chain(), update_timer))
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
@@ -128,6 +132,30 @@ fn setup(
             ..default()
         },
     ));
+
+    commands.spawn((
+        CountdownText,
+        Text::new("2:00"),
+        TextColor(Color::WHITE),
+        TextFont {
+            font_size: 32.,
+            ..default()
+        },
+        TextLayout {
+            justify: JustifyText::Right,
+            ..default()
+        },
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(60.),
+            right: Val::Px(15.),
+            ..default()
+        },
+    ));
+    commands.spawn(CountdownTimer(Timer::from_seconds(
+        GAME_DURACTION_SECS,
+        TimerMode::Once,
+    )));
 }
 
 fn drag_over_cell<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
@@ -183,13 +211,25 @@ fn update_cells(
     }
 }
 
-fn update_score(cells: Query<&mut Cell>, mut score_text: Query<(&ScoreText, &mut Text)>) {
+fn update_score(cells: Query<&mut Cell>, mut score_text: Single<&mut Text, With<ScoreText>>) {
     let score = cells
         .iter()
         .filter(|cell| matches!(cell.status, CellStatus::Hidden))
         .count();
 
-    for (_, mut text) in score_text.iter_mut() {
-        text.0 = format!("Score: {score}");
-    }
+    score_text.0 = format!("Score: {score}");
+}
+
+fn update_timer(
+    time: Res<Time>,
+    mut timer: Single<&mut CountdownTimer>,
+    mut countdown_text: Single<&mut Text, With<CountdownText>>,
+) {
+    timer.0.tick(time.delta());
+
+    countdown_text.0 = format!(
+        "{:0>1}:{:0>2}",
+        timer.0.remaining().as_secs() / 60,
+        timer.0.remaining().as_secs() % 60
+    );
 }
