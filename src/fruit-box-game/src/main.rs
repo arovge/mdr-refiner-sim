@@ -14,6 +14,14 @@ const WIDTH: f32 = (COLS + 3) as f32 * SCALE;
 const GAME_DURACTION_SECS: f32 = 120.;
 const TARGET_SUM: usize = 10;
 
+#[derive(States, Default, Debug, Clone, Eq, PartialEq, Hash)]
+enum GameState {
+    #[default]
+    MainMenu,
+    Playing,
+    Scoreboard,
+}
+
 #[derive(Clone, Copy)]
 enum Status {
     Default,
@@ -66,12 +74,11 @@ struct CountdownText;
 #[derive(Component)]
 struct CountdownTimer(Timer);
 
+#[derive(Component)]
+struct MainMenu;
+
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(DragState::default())
-        .add_systems(Startup, setup)
-        .add_systems(Update, ((update_cells, update_score).chain(), update_timer))
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
@@ -83,16 +90,84 @@ fn main() {
             }),
             MeshPickingPlugin,
         ))
+        .init_state::<GameState>()
+        .insert_resource(ClearColor(Color::BLACK))
+        .add_systems(Startup, setup)
+        .add_systems(OnEnter(GameState::MainMenu), setup_main_menu)
+        .add_systems(OnExit(GameState::MainMenu), tear_down_main_menu)
+        .add_systems(OnEnter(GameState::Playing), setup_game)
+        .add_systems(
+            Update,
+            ((update_cells, update_score).chain(), update_timer)
+                .run_if(in_state(GameState::Playing)),
+        )
+        .add_systems(OnExit(GameState::Playing), tear_down_game)
         .run();
 }
 
-fn setup(
+fn setup(mut commands: Commands) {
+    commands.spawn(Camera2d);
+}
+
+fn setup_main_menu(mut commands: Commands) {
+    commands
+        .spawn((
+            MainMenu,
+            Node {
+                display: Display::Flex,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(50.),
+                height: Val::Percent(100.),
+                width: Val::Percent(100.),
+                ..default()
+            },
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("Fruit Box"),
+                TextFont {
+                    font_size: 56.,
+                    ..default()
+                },
+            ));
+            parent
+                .spawn((
+                    Text::new("Play"),
+                    TextColor(Color::BLACK),
+                    TextFont {
+                        font_size: 48.,
+                        ..default()
+                    },
+                    TextLayout {
+                        justify: JustifyText::Center,
+                        ..default()
+                    },
+                    Node {
+                        padding: UiRect::horizontal(Val::Px(100.)),
+                        ..default()
+                    },
+                    BorderRadius::all(Val::Px(12.)),
+                    BackgroundColor(Color::WHITE),
+                ))
+                .observe(play);
+        });
+}
+
+fn tear_down_main_menu(mut commands: Commands, text: Single<Entity, With<MainMenu>>) {
+    commands.entity(*text).despawn_recursive();
+}
+
+fn play(_trigger: Trigger<Pointer<Click>>, mut commands: Commands) {
+    commands.set_state(GameState::Playing);
+}
+
+fn setup_game(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    commands.spawn(Camera2d);
-
     let square = Rectangle::new(SCALE, SCALE);
     let cell_color = materials.add(Color::WHITE);
     let text_color = Color::BLACK;
@@ -173,6 +248,22 @@ fn setup(
         GAME_DURACTION_SECS,
         TimerMode::Once,
     )));
+    commands.init_resource::<DragState>();
+}
+
+fn tear_down_game(
+    mut commands: Commands,
+    cell_entities: Query<Entity, With<Cell>>,
+    countdown_text: Single<Entity, With<CountdownText>>,
+    score_text: Single<Entity, With<ScoreText>>,
+    countdown_timer: Single<Entity, With<CountdownTimer>>,
+) {
+    for entity in cell_entities.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+    commands.entity(*countdown_text).despawn_recursive();
+    commands.entity(*score_text).despawn_recursive();
+    commands.entity(*countdown_timer).despawn_recursive();
 }
 
 fn drag_start(
@@ -285,11 +376,15 @@ fn update_score(cells: Query<&mut Cell>, mut score_text: Single<&mut Text, With<
 
 fn update_timer(
     time: Res<Time>,
+    mut commands: Commands,
     mut timer: Single<&mut CountdownTimer>,
     mut countdown_text: Single<&mut Text, With<CountdownText>>,
 ) {
     timer.0.tick(time.delta());
     countdown_text.0 = format_duration(timer.0.remaining());
+    if timer.0.finished() {
+        commands.set_state(GameState::Scoreboard);
+    }
 }
 
 fn format_duration(duration: Duration) -> String {
