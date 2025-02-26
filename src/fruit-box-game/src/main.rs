@@ -11,15 +11,17 @@ const HEIGHT: f32 = ROWS as f32 * SCALE;
 const WIDTH: f32 = (COLS + 3) as f32 * SCALE;
 const GAME_DURACTION_SECS: f32 = 120.;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 enum CellStatus {
     Selected,
     Idle,
     Hidden,
 }
 
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Copy)]
 struct Cell {
+    col: usize,
+    row: usize,
     value: usize,
     status: CellStatus,
 }
@@ -38,18 +40,21 @@ struct CountdownTimer(Timer);
 
 impl Grid {
     pub fn new() -> Self {
-        let mut grid: Vec<Vec<Cell>> = Vec::new();
+        let mut grid: Vec<Vec<Cell>> = Vec::with_capacity(COLS);
         for col in 0..COLS {
-            grid.push(Vec::new());
-
-            for _ in 0..ROWS {
+            let mut rows = Vec::with_capacity(ROWS);
+            for row in 0..ROWS {
                 let value = rand::random_range(1..=9);
                 let cell = Cell {
+                    col,
+                    row,
                     value,
                     status: CellStatus::Idle,
                 };
-                grid[col].push(cell);
+                rows.push(cell);
             }
+
+            grid.push(rows);
         }
         Grid(grid)
     }
@@ -163,10 +168,26 @@ fn setup(
 }
 
 fn drag_over_cell<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
-    let mut cell = query.get_mut(trigger.entity()).unwrap();
-    if !matches!(cell.status, CellStatus::Hidden) {
-        cell.status = CellStatus::Selected;
+    // TODO: Need to add a check that this cell is connected to other cells.
+    // Otherwise, the user could have the cursor leave the window or drag over hidden cells,
+    // then continue the drag over an idle cell that isn't connected to the selected group.
+    //
+    let cell = query.get(trigger.entity()).unwrap();
+    if matches!(cell.status, CellStatus::Hidden) {
+        return;
     }
+
+    let is_aligned = query.iter().all(|c| {
+        !matches!(c.status, CellStatus::Selected) || c.row == cell.row || c.col == cell.col
+    });
+
+    if !is_aligned {
+        return;
+    }
+
+    let mut cell = query.get_mut(trigger.entity()).unwrap();
+
+    cell.status = CellStatus::Selected;
 }
 
 fn end_drag(_trigger: Trigger<Pointer<DragEnd>>, mut query: Query<&mut Cell>) {
