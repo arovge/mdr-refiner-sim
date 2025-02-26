@@ -198,9 +198,9 @@ fn drag_over<E>(trigger: Trigger<E>, mut query: Query<&mut Cell>) {
             .filter(|c| matches!(c.status, Status::Selected))
             .any(|c| {
                 (c.row + 1 == cell.row && c.col == cell.col)
-                    || (c.row - 1 == cell.row && c.col == cell.col)
+                    || (c.row.saturating_sub(1) == cell.row && c.col == cell.col)
                     || (c.row == cell.row && c.col + 1 == cell.col)
-                    || (c.row == cell.row && c.col - 1 == cell.col)
+                    || (c.row == cell.row && c.col.saturating_sub(1) == cell.col)
             });
 
         if !is_connected {
