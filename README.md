@@ -1,9 +1,9 @@
-# fruit-box-game
+# mdr-refiner-sim
 
-A reimplementation of the Fruit Box game, now with multiplayer
+A realistic innie simulator.
 
-## Running the game
+## Run simulator
 
 ```bash
-$ cargo run -p game
+$ cargo run -p simulator
 ```

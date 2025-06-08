@@ -30,9 +30,16 @@ fn setup(mut commands: Commands) {
         ))
         .with_children(|parent| {
             parent.spawn((
-                Text::new("Fruit Box"),
+                Text::new("MDR Simulator"),
                 TextFont {
                     font_size: 56.,
+                    ..default()
+                },
+            ));
+            parent.spawn((
+                Text::new("Welcome Refiner"),
+                TextFont {
+                    font_size: 48.,
                     ..default()
                 },
             ));
