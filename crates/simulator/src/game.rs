@@ -100,17 +100,15 @@ fn setup(
                         (y as f32 * SCALE) - (HEIGHT / 2.) + (SCALE / 2.),
                         0.,
                     ),
-                ))
-                .with_children(|parent| {
-                    parent.spawn((
+                    children![(
                         Text2d(cell.clone().value.to_string()),
                         TextColor(text_color),
                         TextFont {
                             font_size: 32.,
                             ..default()
                         },
-                    ));
-                })
+                    )],
+                ))
                 .observe(drag_start)
                 .observe(drag_over)
                 .observe(drag_end);
@@ -168,10 +166,10 @@ fn tear_down(
     countdown_timer: Single<Entity, With<CountdownTimer>>,
 ) {
     for entity in cell_entities.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
-    commands.entity(*score_text).despawn_recursive();
-    commands.entity(*countdown_timer).despawn_recursive();
+    commands.entity(*score_text).despawn();
+    commands.entity(*countdown_timer).despawn();
 }
 
 fn drag_start(
@@ -179,7 +177,7 @@ fn drag_start(
     query: Query<&Cell>,
     mut drag_state: ResMut<DragState>,
 ) {
-    let cell = query.get(trigger.entity()).unwrap();
+    let cell = query.get(trigger.target()).unwrap();
     drag_state.0 = DragGesture::Dragging {
         start: Position {
             col: cell.col,
@@ -193,7 +191,7 @@ fn drag_over(
     mut drag_state: ResMut<DragState>,
     mut cells: Query<&mut Cell>,
 ) {
-    let cell = cells.get(trigger.entity()).unwrap();
+    let cell = cells.get(trigger.target()).unwrap();
     let drag_start = drag_state.0.start();
     drag_state.0 = DragGesture::Dragging {
         start: drag_start.unwrap_or(Position::default()),
@@ -265,7 +263,7 @@ fn update_cells(
             }
             Status::Scored => {
                 material.0 = hidden_color.clone();
-                commands.entity(entity).despawn_descendants();
+                commands.entity(entity).despawn_related::<Children>();
             }
         }
     }
