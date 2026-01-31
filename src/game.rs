@@ -90,8 +90,8 @@ fn setup(
     for x in 0..COLS {
         for y in 0..ROWS {
             let cell = grid[x][y].clone();
-            let cell_x = (x * SCALE) - (WIDTH / 2) + (SCALE / 2);
-            let cell_y = (y * SCALE) - (HEIGHT / 2) + (SCALE / 2);
+            let cell_x = (x as f32 * SCALE as f32) - (WIDTH as f32 / 2.) + (SCALE as f32 / 2.);
+            let cell_y = (y as f32 * SCALE as f32) - (HEIGHT as f32 / 2.) + (SCALE as f32 / 2.);
             commands
                 .spawn((
                     cell.clone(),
