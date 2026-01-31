@@ -10,9 +10,9 @@ const GAME_DURACTION_SECS: f32 = 120.;
 const TARGET_SUM: usize = 10;
 const ROWS: usize = 10;
 const COLS: usize = 17;
-const SCALE: f32 = 100.;
-pub const HEIGHT: f32 = ROWS as f32 * SCALE;
-pub const WIDTH: f32 = (COLS + 3) as f32 * SCALE;
+const SCALE: usize = 100;
+pub const HEIGHT: usize = ROWS * SCALE;
+pub const WIDTH: usize = (COLS + 3) * SCALE;
 
 pub struct GamePlugin;
 
@@ -82,7 +82,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    let square = Rectangle::new(SCALE, SCALE);
+    let square = Rectangle::new(SCALE as f32, SCALE as f32);
     let cell_color = materials.add(Color::WHITE);
     let text_color = Color::BLACK;
     let grid = build_cells();
@@ -90,16 +90,14 @@ fn setup(
     for x in 0..COLS {
         for y in 0..ROWS {
             let cell = grid[x][y].clone();
+            let cell_x = (x * SCALE) - (WIDTH / 2) + (SCALE / 2);
+            let cell_y = (y * SCALE) - (HEIGHT / 2) + (SCALE / 2);
             commands
                 .spawn((
                     cell.clone(),
                     Mesh2d(meshes.add(square)),
                     MeshMaterial2d(cell_color.clone()),
-                    Transform::from_xyz(
-                        (x as f32 * SCALE) - (WIDTH / 2.) + (SCALE / 2.),
-                        (y as f32 * SCALE) - (HEIGHT / 2.) + (SCALE / 2.),
-                        0.,
-                    ),
+                    Transform::from_xyz(cell_x as f32, cell_y as f32, 0.),
                     children![(
                         Text2d(cell.clone().value.to_string()),
                         TextColor(text_color),
@@ -124,7 +122,7 @@ fn setup(
             ..default()
         },
         TextLayout {
-            justify: JustifyText::Right,
+            justify: Justify::Right,
             ..default()
         },
         Node {
@@ -146,7 +144,7 @@ fn setup(
             ..default()
         },
         TextLayout {
-            justify: JustifyText::Right,
+            justify: Justify::Right,
             ..default()
         },
         Node {
@@ -173,11 +171,11 @@ fn tear_down(
 }
 
 fn drag_start(
-    trigger: Trigger<Pointer<DragStart>>,
+    drag_start: On<Pointer<DragStart>>,
     query: Query<&Cell>,
     mut drag_state: ResMut<DragState>,
 ) {
-    let cell = query.get(trigger.target()).unwrap();
+    let cell = query.get(drag_start.entity).unwrap();
     drag_state.0 = DragGesture::Dragging {
         start: Position {
             col: cell.col,
@@ -187,11 +185,11 @@ fn drag_start(
 }
 
 fn drag_over(
-    trigger: Trigger<Pointer<DragOver>>,
+    drag_over: On<Pointer<DragOver>>,
     mut drag_state: ResMut<DragState>,
     mut cells: Query<&mut Cell>,
 ) {
-    let cell = cells.get(trigger.target()).unwrap();
+    let cell = cells.get(drag_over.entity).unwrap();
     let drag_start = drag_state.0.start();
     drag_state.0 = DragGesture::Dragging {
         start: drag_start.unwrap_or(Position::default()),
@@ -213,7 +211,7 @@ fn drag_over(
     }
 }
 
-fn drag_end(_trigger: Trigger<Pointer<DragEnd>>, mut drag_state: ResMut<DragState>) {
+fn drag_end(_drag_end: On<Pointer<DragEnd>>, mut drag_state: ResMut<DragState>) {
     drag_state.0 = DragGesture::Ended;
 }
 
@@ -288,7 +286,7 @@ fn update_timer(
 ) {
     timer.0.tick(time.delta());
     countdown_text.0 = format_duration(timer.0.remaining());
-    if timer.0.finished() {
+    if timer.0.is_finished() {
         let next_id = high_scores.iter().count() + 1;
         let score = cells
             .iter()

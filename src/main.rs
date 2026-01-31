@@ -13,7 +13,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    resolution: WindowResolution::new(game::WIDTH, game::HEIGHT)
+                    resolution: WindowResolution::new(game::WIDTH as u32, game::HEIGHT as u32)
                         .with_scale_factor_override(1.0),
                     ..default()
                 }),

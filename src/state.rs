@@ -8,6 +8,6 @@ pub enum GameState {
     Leaderboard,
 }
 
-pub fn play(_trigger: Trigger<Pointer<Click>>, mut commands: Commands) {
+pub fn play(_click: On<Pointer<Click>>, mut commands: Commands) {
     commands.set_state(GameState::Playing);
 }

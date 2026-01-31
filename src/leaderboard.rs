@@ -91,7 +91,7 @@ fn setup(mut commands: Commands, scores: Query<&Score>) {
                             ..default()
                         },
                         TextLayout {
-                            justify: JustifyText::Center,
+                            justify: Justify::Center,
                             ..default()
                         },
                         Node {

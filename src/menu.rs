@@ -51,7 +51,7 @@ fn setup(mut commands: Commands) {
                             ..default()
                         },
                         TextLayout {
-                            justify: JustifyText::Center,
+                            justify: Justify::Center,
                             ..default()
                         },
                         Node {
