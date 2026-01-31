@@ -56,9 +56,9 @@ fn setup(mut commands: Commands) {
                         },
                         Node {
                             padding: UiRect::horizontal(Val::Px(100.)),
+                            border_radius: BorderRadius::all(Val::Px(12.)),
                             ..default()
                         },
-                        BorderRadius::all(Val::Px(12.)),
                         BackgroundColor(Color::WHITE),
                     ))
                     .observe(play);
