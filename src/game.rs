@@ -6,7 +6,7 @@ use bevy::{
 };
 use std::time::Duration;
 
-const GAME_DURACTION_SECS: f32 = 120.;
+const GAME_DURATION_SECS: f32 = 120.;
 const TARGET_SUM: usize = 10;
 const ROWS: usize = 10;
 const COLS: usize = 17;
@@ -134,10 +134,8 @@ fn setup(
     ));
 
     commands.spawn((
-        CountdownTimer(Timer::from_seconds(GAME_DURACTION_SECS, TimerMode::Once)),
-        Text::new(format_duration(Duration::from_secs_f32(
-            GAME_DURACTION_SECS,
-        ))),
+        CountdownTimer(Timer::from_seconds(GAME_DURATION_SECS, TimerMode::Once)),
+        Text::new(format_duration(Duration::from_secs_f32(GAME_DURATION_SECS))),
         TextColor(Color::WHITE),
         TextFont {
             font_size: 32.,
